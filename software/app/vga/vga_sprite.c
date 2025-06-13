@@ -5,6 +5,7 @@
 #define ENEMY_ROWS 5
 #define ENEMY_COLS 11
 #define TOTAL_ENEMIES (ENEMY_ROWS * ENEMY_COLS)
+#define SHIELD_POSY 160
 
 
 
@@ -204,6 +205,27 @@ void move_player(struct object_s *obj)
 	}
 }
 
+int loss_conditions(struct object_s *enemies, int *lives){
+	if(lives == 0) return 1;
+	
+	for (int i = 0; i < total_enemies; i++){
+		if(enemies[i].posy + enemies[i].spriteszy == SHIELD_POSY)
+			return 1;
+	}
+
+
+	return 0;
+}
+
+void kill_enemy(struct object_s enemy) {
+	enemy.sprite_frame[3] = invaderExplosion[0];
+
+	draw_object(enemy, 1, -1);
+	draw_object(enemy, 0, 0);
+	enemy = NULL;
+
+}
+
 
 
 void move_enemy_fleet(struct object_s *enemies, int total_enemies, int *fleet_dx)
@@ -219,18 +241,23 @@ void move_enemy_fleet(struct object_s *enemies, int total_enemies, int *fleet_dx
         }
 	}
 	for (int i = 0; i < total_enemies; i++) {
+		if(enemies[i] != NULL){
+			struct object_s oldenemy;
+			struct object_s *enemy = &enemies[i];
+	
+			memcpy(&oldenemy, enemy, sizeof(struct object_s));
+			enemy->posx += *fleet_dx; // Move horizontalmente
+			if (move_down) {
+				if(enemy->posy + step_down > SHIELD_POSY)
+					enemy->posy = SHIELD_POSY;
+				else
+					enemy->posy += step_down; // Move para baixo se necessário
+			}
+	
+			draw_object(&oldenemy, 0, 0);
+			draw_object(enemy, 1, -1);
+		}
 
-		struct object_s oldenemy;
-		struct object_s *enemy = &enemies[i];
-
-		memcpy(&oldenemy, enemy, sizeof(struct object_s));
-		enemy->posx += *fleet_dx; // Move horizontalmente
-        if (move_down) {
-            enemy->posy += step_down; // Move para baixo se necessário
-        }
-
-        draw_object(&oldenemy, 0, 0);
-		draw_object(enemy, 1, -1);
        
        
 		
@@ -254,13 +281,11 @@ int main(void){
 	init_display();
 	init_input();
 
-	init_object(&shield1, shield[0], 0, 0, 22, 16, 30, 160, 0, 0, 0, 0);
-	init_object(&shield2, shield[0], 0, 0, 22, 16, 110, 160, 0, 0, 0, 0);
-	init_object(&shield3, shield[0], 0, 0, 22, 16, 190, 160, 0, 0, 0, 0);
-	init_object(&shield4, shield[0], 0, 0, 22, 16, 270, 160, 0, 0, 0, 0);
+	init_object(&shield1, shield[0], 0, 0, 22, 16, 30, SHIELD_POSY, 0, 0, 0, 0);
+	init_object(&shield2, shield[0], 0, 0, 22, 16, 110, SHIELD_POSY, 0, 0, 0, 0);
+	init_object(&shield3, shield[0], 0, 0, 22, 16, 190, SHIELD_POSY, 0, 0, 0, 0);
+	init_object(&shield4, shield[0], 0, 0, 22, 16, 270, SHIELD_POSY, 0, 0, 0, 0);
 
-	// init_object(&enemy1, monster2a[0], monster2b[0], 0, 11, 8, 30, 35, 1, 1, 3, 3);
-	// init_object(&enemy2, monster2a[0], monster2b[0], 0, 11, 8, 15, 80, -1, 1, 5, 3);
 
 	init_object(&player1, player[0], 0, 0, 13, 8, 150, 180, -1, 0, 1, 1);
 
@@ -274,6 +299,8 @@ int main(void){
 		move_player(&player1);
 
 		move_enemy_fleet(enemies, TOTAL_ENEMIES, &fleet_dx);
+
+
 		
 
 
@@ -294,7 +321,7 @@ int main(void){
 		}
 		else player1.dx = 0;
 		if(get_input() == KEY_CENTER){
-			//shoot
+			kill_enemy(enemies[1]);
 		}
 		
 		// game loop frame limiter
