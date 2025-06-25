@@ -6,9 +6,11 @@
 #define ENEMY_COLS 11
 #define TOTAL_ENEMIES (ENEMY_ROWS * ENEMY_COLS)
 #define SHIELD_POSY 160
+#define SHIELD_POSX 20
+#define SHIELD_DURABILITY 20
 
-// --- NOVAS DEFINIÇÕES ---
-#define MAX_PLAYER_BULLETS 3
+
+#define MAX_PLAYER_BULLETS 5
 #define MAX_ENEMY_BULLETS 5
 
 void draw_sprite(unsigned int x, unsigned int y, char *sprite,
@@ -37,7 +39,7 @@ struct object_s {
     int dx, dy;
     int speedx, speedy;
     int speedxcnt, speedycnt;
-    int is_alive;
+    int lives;
     int points; // NOVO CAMPO PARA PONTUAÇÃO
 };
 
@@ -59,7 +61,7 @@ void init_object(struct object_s *obj, char *spritea, char *spriteb,
     obj->speedy = spy;
     obj->speedxcnt = spx;
     obj->speedycnt = spy;
-    obj->is_alive = 1;
+    obj->lives = 1;
     obj->points = points; 
 }
 
@@ -135,7 +137,7 @@ int get_input()
 
 int detect_collision(struct object_s *obj1, struct object_s *obj2)
 {
-    if (obj1->is_alive && obj2->is_alive &&
+    if (obj1->lives && obj2->lives &&
         obj1->posx < obj2->posx + obj2->spriteszx &&
         obj1->posx + obj1->spriteszx > obj2->posx &&
         obj1->posy < obj2->posy + obj2->spriteszy &&
@@ -209,13 +211,13 @@ void move_player(struct object_s *obj)
 }
 
 void kill_enemy(struct object_s *enemy) {
-    if (!enemy->is_alive) return;
+    if (!enemy->lives) return;
 
     draw_object(enemy, 0, 0); 
     draw_sprite(enemy->posx, enemy->posy, (char*)invaderExplosion, 13, 7, -1);
-    delay_ms(20); 
+    delay_ms(10); 
     draw_sprite(enemy->posx, enemy->posy, (char*)invaderExplosion, 13, 7, 0); 
-    enemy->is_alive = 0;
+    enemy->lives = 0;
 }
 
 void move_enemy_fleet(struct object_s *enemies, int *fleet_dx)
@@ -226,7 +228,7 @@ void move_enemy_fleet(struct object_s *enemies, int *fleet_dx)
     int step_down = 3;
     
     for (int i = 0; i < TOTAL_ENEMIES; i++) {
-        if (!enemies[i].is_alive) continue;
+        if (!enemies[i].lives) continue;
         if ((enemies[i].posx + enemies[i].spriteszx >= VGA_WIDTH - 1 && *fleet_dx > 0) || (enemies[i].posx <= 1 && *fleet_dx < 0)) {
             *fleet_dx = -*fleet_dx;
             move_down = 1;
@@ -235,7 +237,7 @@ void move_enemy_fleet(struct object_s *enemies, int *fleet_dx)
     }
 
     for (int i = 0; i < TOTAL_ENEMIES; i++) {
-        if(enemies[i].is_alive){
+        if(enemies[i].lives){
             struct object_s oldenemy;
             struct object_s *enemy = &enemies[i];
             
@@ -255,17 +257,16 @@ void move_enemy_fleet(struct object_s *enemies, int *fleet_dx)
     }
 }
 
-// --- NOVAS FUNÇÕES PARA TIROS ---
 
 void move_bullet(struct object_s *bullet) {
-    if (!bullet->is_alive) return;
+    if (!bullet->lives) return;
 
     draw_sprite(bullet->posx, bullet->posy, bullet->sprite_frame[0], bullet->spriteszx, bullet->spriteszy, 0);
 
     bullet->posy += bullet->dy;
 
     if (bullet->posy <= 0 || bullet->posy >= VGA_HEIGHT) {
-        bullet->is_alive = 0; 
+        bullet->lives = 0; 
         return;
     }
 
@@ -275,22 +276,22 @@ void move_bullet(struct object_s *bullet) {
 
 void fire_player_bullet(struct object_s *player, struct object_s *bullets) {
     for (int i = 0; i < MAX_PLAYER_BULLETS; i++) {
-        if (!bullets[i].is_alive) {
+        if (!bullets[i].lives) {
             int bullet_x = player->posx + (player->spriteszx / 2) - 2; 
             int bullet_y = player->posy;
             init_object(&bullets[i], (char*)playerBullet, 0, 0, 5, 3,
-                        bullet_x, bullet_y, 0, -2, 1, 1, 0); 
+                        bullet_x, bullet_y, 0, -4, 1, 1, 0); 
             return; 
         }
     }
 }
 
 void fire_enemy_bullet(struct object_s *enemies, struct object_s *bullets) {
-    // Chance de atirar (ex: 3% a cada frame)
-    if (random() % 100 > 97) {
+    // Chance de atirar (2% a cada frame)
+    if (random() % 100 > 98) {
         int bullet_slot = -1;
         for (int i = 0; i < MAX_ENEMY_BULLETS; i++) {
-            if (!bullets[i].is_alive) {
+            if (!bullets[i].lives) {
                 bullet_slot = i;
                 break;
             }
@@ -300,7 +301,7 @@ void fire_enemy_bullet(struct object_s *enemies, struct object_s *bullets) {
         int alive_enemies_idx[TOTAL_ENEMIES];
         int num_alive_enemies = 0;
         for (int i = 0; i < TOTAL_ENEMIES; i++) {
-            if (enemies[i].is_alive) {
+            if (enemies[i].lives) {
                 alive_enemies_idx[num_alive_enemies++] = i;
             }
         }
@@ -313,16 +314,54 @@ void fire_enemy_bullet(struct object_s *enemies, struct object_s *bullets) {
             int bullet_y = shooter->posy + shooter->spriteszy;
             
             init_object(&bullets[bullet_slot], (char*)enemyBullet, 0, 0, 5, 3,
-                        bullet_x, bullet_y, 0, 2, 1, 1, 0); 
+                        bullet_x, bullet_y, 0, 4, 1, 1, 0); 
         }
     }
 }
 
+void update_shield(struct object_s *s) {
+    int px = 2;
+    int py = 2;
+    char str;
+    if(s->lives > 0){
+        s->lives = s->lives - 1;
+        if(s->lives == 0) {
+            draw_object(s, 0, 0);
+            return;
+        }
+        if(s->lives < 10){
+            px = px + 5;
+        }
+        itoa(s->lives + 1, &str, 10);
+        if(s->lives + 1 == 10) display_print(&str, s->posx + px - 5, s->posy + py, 1, 2);
+        else display_print(&str, s->posx + px, s->posy + py, 1, 2);
+        itoa(s->lives, &str, 10);
+
+        display_print(&str, s->posx + px, s->posy + py, 1, 0);
+    }
+}
+
+void init_shields(struct object_s *s){
+    int posx = SHIELD_POSX;
+    char str;
+    for(int i = 0; i < 4; i++) {
+        struct object_s *current_shield = &s[i];
+        init_object(current_shield, (char*)shield, 0, 0, 22, 16, posx, SHIELD_POSY, 0, 0, 0, 0, 0);
+        current_shield->lives = SHIELD_DURABILITY;
+        draw_object(current_shield, 0, -1);
+        itoa(current_shield->lives, &str, 10);
+        display_print(&str, current_shield->posx + 2, current_shield->posy + 2, 1, 0);
+        posx = posx + 80;
+    }
+}
 
 /* main game loop */
 int main(void){
     int fleet_dx = 1;
-    int score = 0; // VARIÁVEL PARA GUARDAR A PONTUAÇÃO
+    int score = 0;
+    int fire_delay = 12; // 12 frames
+    int aux_delay = fire_delay;
+    int gamestate = 0;
 
     struct object_s enemies[TOTAL_ENEMIES];
     struct object_s player1;
@@ -334,22 +373,29 @@ int main(void){
     init_display();
     init_input();
 
-    // ... (resto da inicialização não muda) ...
-    init_object(&shields[0], (char*)shield, 0, 0, 22, 16, 20, SHIELD_POSY, 0, 0, 0, 0, 0);
-    init_object(&shields[1], (char*)shield, 0, 0, 22, 16, 100, SHIELD_POSY, 0, 0, 0, 0, 0);
-    init_object(&shields[2], (char*)shield, 0, 0, 22, 16, 180, SHIELD_POSY, 0, 0, 0, 0, 0);
-    init_object(&shields[3], (char*)shield, 0, 0, 22, 16, 260, SHIELD_POSY, 0, 0, 0, 0, 0);
+    
+    // init_object(&shields[0], (char*)shield, 0, 0, 22, 16, 20, SHIELD_POSY, 0, 0, 0, 0, 0);
+    // init_object(&shields[1], (char*)shield, 0, 0, 22, 16, 100, SHIELD_POSY, 0, 0, 0, 0, 0);
+    // init_object(&shields[2], (char*)shield, 0, 0, 22, 16, 180, SHIELD_POSY, 0, 0, 0, 0, 0);
+    // init_object(&shields[3], (char*)shield, 0, 0, 22, 16, 260, SHIELD_POSY, 0, 0, 0, 0, 0);
+    // int shieldpos = 20;
+    // for(int i = 0; i < 4; i++) {
+    //     init_object(&shields[i], (char*)shield, 0, 0, 22, 16, shieldpos, SHIELD_POSY, 0, 0, 0, 0, 0);
+    //     draw_object(&shields[i], 0, -1);
+    //     shields[i].lives = SHIELD_DURABILITY;
+    //     update_shield(&shields[i]);
+    //     shieldpos = shieldpos + 80;
+    // }
+    init_shields(shields);
 
-    for(int i = 0; i < 4; i++) draw_object(&shields[i], 0, -1);
-
-    init_object(&player1, (char*)player, 0, 0, 13, 8, 150, 180, 0, 0, 2, 1, 0);
+    init_object(&player1, (char*)player, 0, 0, 13, 8, 150, 190, 0, 0, 2, 1, 0);
     init_enemy_fleet(enemies);
     
-    // NOTA: Adicione aqui uma função para exibir a pontuação inicial (ex: "Score: 0")
+    
     printf("\n%d",score);
 
-    for (int i = 0; i < MAX_PLAYER_BULLETS; i++) player_bullets[i].is_alive = 0;
-    for (int i = 0; i < MAX_ENEMY_BULLETS; i++)  enemy_bullets[i].is_alive = 0;
+    for (int i = 0; i < MAX_PLAYER_BULLETS; i++) player_bullets[i].lives = 0;
+    for (int i = 0; i < MAX_ENEMY_BULLETS; i++)  enemy_bullets[i].lives = 0;
 
     while (1) {
         move_player(&player1);
@@ -362,56 +408,73 @@ int main(void){
 
         // Colisão: Tiro do jogador vs Inimigos e Escudos
         for (int i = 0; i < MAX_PLAYER_BULLETS; i++) {
-            if (!player_bullets[i].is_alive) continue;
+            if (!player_bullets[i].lives) continue;
             for (int j = 0; j < TOTAL_ENEMIES; j++) {
                 // Verifica se o inimigo está vivo antes da colisão
-                if (enemies[j].is_alive && detect_collision(&player_bullets[i], &enemies[j])) {
+                if (enemies[j].lives && detect_collision(&player_bullets[i], &enemies[j])) {
                     
-                    // --- LÓGICA DE PONTUAÇÃO ---
+                    
                     score += enemies[j].points; // Adiciona os pontos do inimigo
-                    // NOTA: Chame aqui uma função para ATUALIZAR a exibição da pontuação na tela
+                    
                     printf("\n%d",score);
-                    // --------------------------
+                    
 
                     kill_enemy(&enemies[j]);
-                    player_bullets[i].is_alive = 0;
+                    player_bullets[i].lives = 0;
                     draw_sprite(player_bullets[i].posx, player_bullets[i].posy, player_bullets[i].sprite_frame[0], player_bullets[i].spriteszx, player_bullets[i].spriteszy, 0);
                     break; // Sai do loop de inimigos, pois o tiro já colidiu
                 }
             }
+            for (int k = 0; k < 4; k++) {
+                if (shields[k].lives > 0 && detect_collision(&player_bullets[i], &shields[k])) {
+                    player_bullets[i].lives = 0;
+                    update_shield(&shields[k]); 
+                    draw_sprite(player_bullets[i].posx, player_bullets[i].posy, player_bullets[i].sprite_frame[0], player_bullets[i].spriteszx, player_bullets[i].spriteszy, 0);
+                    break;
+                }
+            }
+            
 		}
         
         // Colisão: Tiro do Inimigo vs Jogador e Escudos
         for (int i = 0; i < MAX_ENEMY_BULLETS; i++) {
-             if (!enemy_bullets[i].is_alive) continue;
-             if(detect_collision(&enemy_bullets[i], &player1)) {
-                player1.is_alive = 0;
+            if (!enemy_bullets[i].lives) continue;
+            if(detect_collision(&enemy_bullets[i], &player1)) {
+                player1.lives = 0;
                 draw_object(&player1, 0, 0);
-                enemy_bullets[i].is_alive = 0;
+                enemy_bullets[i].lives = 0;
                 draw_sprite(enemy_bullets[i].posx, enemy_bullets[i].posy, enemy_bullets[i].sprite_frame[0], enemy_bullets[i].spriteszx, enemy_bullets[i].spriteszy, 0);
-             }
-             for (int j = 0; j < 4; j++) {
-                if (detect_collision(&enemy_bullets[i], &shields[j])) {
-                    enemy_bullets[i].is_alive = 0;
+            }
+            for (int j = 0; j < 4; j++) {
+                if (shields[j].lives > 0 && detect_collision(&enemy_bullets[i], &shields[j])) {
+                    enemy_bullets[i].lives = 0;
+                    update_shield(&shields[j]);
                     draw_sprite(enemy_bullets[i].posx, enemy_bullets[i].posy, enemy_bullets[i].sprite_frame[0], enemy_bullets[i].spriteszx, enemy_bullets[i].spriteszy, 0);
+                    break;
                 }
             }
         }
 
         int key = get_input();
+        if (key & KEY_UP) {
+            gamestate = 1;
+        }    
         if (key & KEY_LEFT) {
-            player1.dx = -3;
+            player1.dx = -4;
         } else if (key & KEY_RIGHT) {
-            player1.dx = 3;
+            player1.dx = 4;
         } else {
             player1.dx = 0;
-        }
-        
-        if(key & KEY_CENTER){
+        } 
+        if(key & KEY_CENTER && aux_delay == fire_delay){
             fire_player_bullet(&player1, player_bullets);
+            aux_delay = 0;
+        }
+        else if(aux_delay < fire_delay){
+            aux_delay++;
         }
         
-        delay_ms(10);
+        delay_ms(30);
     }
 
     return 0;
