@@ -1,0 +1,5 @@
+montar layout de pontos e vida 
+logica mudar velociade, reiniciar ao matar todos, perder etc
+pequena maquina de estados para fazer isso
+NAVE MISTERIO 0.5% de aparecer por frame, entre 100 e 150 de recompensa
+explosao/morte jogador
